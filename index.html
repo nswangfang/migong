@@ -193,9 +193,6 @@ export default function App() {
           <h1 className="text-2xl md:text-3xl font-black text-teal-800 flex items-center gap-2">
             <Camera className="w-8 h-8 text-teal-500" /> 词语照相机 · 考试模式
           </h1>
-          <p className="text-slate-500 text-sm mt-1 flex items-center gap-1 font-bold">
-            <Info className="w-4 h-4 text-teal-500"/> 提示：没有任何中途加分！走到出口后点击【交卷检查】。点绿色的字可以后退。
-          </p>
         </div>
 
         <div className="flex items-center gap-2">
@@ -218,6 +215,30 @@ export default function App() {
           >
             <RefreshCw className="w-6 h-6" />
           </button>
+        </div>
+      </div>
+
+      {/* 游戏说明 / Instructions */}
+      <div className="w-full max-w-5xl bg-sky-50 rounded-2xl p-4 md:p-5 mb-4 border border-sky-100 shadow-sm">
+        <h2 className="font-black text-sky-800 mb-3 flex items-center gap-2 text-lg">
+          <Info className="w-5 h-5"/> 游戏说明 Instructions
+        </h2>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-4 text-sm md:text-base text-slate-700">
+          <div className="bg-white p-3 md:p-4 rounded-xl shadow-sm border border-sky-50">
+            <p className="font-bold mb-1 text-slate-800"><span className="text-sky-500 mr-1">1.</span>连词成句</p>
+            <p className="leading-snug">从起点出发，点击相邻的汉字，连成正确的词语。</p>
+            <p className="text-slate-400 text-xs mt-2 leading-tight font-medium">Start from the origin and click adjacent characters to form correct words.</p>
+          </div>
+          <div className="bg-white p-3 md:p-4 rounded-xl shadow-sm border border-sky-50">
+            <p className="font-bold mb-1 text-slate-800"><span className="text-sky-500 mr-1">2.</span>自由后退</p>
+            <p className="leading-snug">如果选错了，点击已经走过的<span className="text-teal-600 font-bold mx-1">绿色字</span>即可后退。</p>
+            <p className="text-slate-400 text-xs mt-2 leading-tight font-medium">Click the <span className="text-teal-500 font-bold">green characters</span> you've passed to step back.</p>
+          </div>
+          <div className="bg-white p-3 md:p-4 rounded-xl shadow-sm border border-sky-50">
+            <p className="font-bold mb-1 text-slate-800"><span className="text-sky-500 mr-1">3.</span>交卷检查</p>
+            <p className="leading-snug">走到终点后，点击底部的<span className="font-bold mx-1">“交卷检查”</span>查看成绩。</p>
+            <p className="text-slate-400 text-xs mt-2 leading-tight font-medium">Reach the exit and click <span className="font-bold">"Submit"</span> to check your result.</p>
+          </div>
         </div>
       </div>
 
