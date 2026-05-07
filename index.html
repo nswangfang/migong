@@ -1,0 +1,356 @@
+import React, { useState, useCallback } from 'react';
+import { Camera, MapPin, RefreshCw, Volume2, VolumeX, Info, Send } from 'lucide-react';
+
+// 节点数据保持不变，拼音保持深黑色
+const nodes = [
+  { id: 's', char: '牛车水', pinyin: 'niú chē shuǐ', r: 2, c: 0 },
+  { id: 'ju', char: '聚', pinyin: 'jù', r: 2, c: 1 },
+  { id: 'ji', char: '集', pinyin: 'jí', r: 2, c: 2 },
+  { id: 'he', char: '合', pinyin: 'hé', r: 3, c: 2 },
+  { id: 'zuo', char: '作', pinyin: 'zuò', r: 4, c: 2 },
+  { id: 'yong', char: '用', pinyin: 'yòng', r: 5, c: 1 },
+  { id: 'gong', char: '功', pinyin: 'gōng', r: 5, c: 2 },
+  { id: 'ke', char: '课', pinyin: 'kè', r: 5, c: 3 },
+  { id: 'ben', char: '本', pinyin: 'běn', r: 4, c: 3 },
+  { id: 'di', char: '地', pinyin: 'dì', r: 4, c: 4 },
+  { id: 'tu', char: '图', pinyin: 'tú', r: 1, c: 5 },
+  { id: 'hua', char: '画', pinyin: 'huà', r: 0, c: 5 },
+  { id: 'jia', char: '家', pinyin: 'jiā', r: 2, c: 6 },
+  { id: 'zhang', char: '长', pinyin: 'zhǎng', r: 3, c: 7 },
+  { id: 'da', char: '大', pinyin: 'dà', r: 3, c: 6 },
+  { id: 'li_true', char: '力', pinyin: 'lì', r: 5, c: 6 },
+  { id: 'qi', char: '气', pinyin: 'qì', r: 6, c: 6 },
+  { id: 'qiu', char: '球', pinyin: 'qiú', r: 5, c: 7 },
+  { id: 'mi', char: '迷', pinyin: 'mí', r: 6, c: 7 },
+  { id: 'gong2', char: '宫', pinyin: 'gōng', r: 6, c: 8 },
+  { id: 'e2', char: '乌节路', pinyin: 'wū jié lù', r: 6, c: 9 },
+
+  // 干扰字
+  { id: 'xing1', char: '星', pinyin: 'xīng', r: 3, c: 1 },
+  { id: 'ye', char: '业', pinyin: 'yè', r: 4, c: 1 },
+  { id: 'li_false', char: '力', pinyin: 'lì', r: 3, c: 3 },
+  { id: 'qian', char: '前', pinyin: 'qián', r: 5, c: 5 },
+  { id: 'fang', char: '方', pinyin: 'fāng', r: 6, c: 5 },
+  { id: 'xing2', char: '星', pinyin: 'xīng', r: 5, c: 4 },
+  { id: 'ye2', char: '夜', pinyin: 'yè', r: 4, c: 5 },
+  { id: 'po', char: '婆', pinyin: 'pó', r: 2, c: 5 },
+  { id: 'jin', char: '进', pinyin: 'jìn', r: 2, c: 7 },
+  { id: 'yi', char: '宜', pinyin: 'yí', r: 1, c: 7 },
+  { id: 'e1', char: '白沙浮', pinyin: 'bái shā fú', r: 1, c: 8 },
+  { id: 'wai', char: '外', pinyin: 'wài', r: 0, c: 2 },
+  { id: 'xiang', char: '向', pinyin: 'xiàng', r: 0, c: 3 },
+  { id: 'mian', char: '面', pinyin: 'miàn', r: 4, c: 7 }
+];
+
+// 增加大量干扰连线，把迷宫变成错综复杂的网，杜绝“看线猜答案”
+const edges = [
+  // 正确路线
+  ['s', 'ju'], ['ju', 'ji'], ['ji', 'he'], ['he', 'zuo'], ['zuo', 'yong'],
+  ['yong', 'gong'], ['gong', 'ke'], ['ke', 'ben'], ['ben', 'di'], ['di', 'tu'],
+  ['tu', 'hua'], ['hua', 'jia'], ['jia', 'zhang'], ['zhang', 'da'], ['da', 'li_true'],
+  ['li_true', 'qi'], ['qi', 'qiu'], ['qiu', 'mi'], ['mi', 'gong2'], ['gong2', 'e2'],
+  
+  // 强干扰路线（制造大量循环和错误词组，如“图婆家”、“星夜”、“长大进”等）
+  ['ju', 'xing1'], ['xing1', 'ye'], ['ye', 'yong'], 
+  ['ji', 'wai'], ['wai', 'xiang'], ['xiang', 'tu'],
+  ['he', 'li_false'], ['li_false', 'ben'], ['zuo', 'xing1'],
+  ['ke', 'xing2'], ['xing2', 'qian'], ['qian', 'fang'], ['fang', 'li_true'], ['fang', 'qi'],
+  ['di', 'xing2'], ['xing2', 'ye2'], ['ye2', 'mian'], ['mian', 'qiu'],
+  ['tu', 'po'], ['po', 'jia'], 
+  ['zhang', 'jin'], ['jin', 'yi'], ['yi', 'e1'], 
+  ['da', 'ye2'], ['gong', 'li_false']
+];
+
+// 唯一正确的纯汉字接龙顺序 (用于最终比对)
+const TARGET_STRING = "聚集合作用功课本地图画家长大力气球迷宫";
+
+export default function App() {
+  const [path, setPath] = useState(['s']); // 记录玩家走过的所有节点ID
+  const [showPinyin, setShowPinyin] = useState(false);
+  const [soundEnabled, setSoundEnabled] = useState(true);
+  const [toast, setToast] = useState(null);
+  const [gameResult, setGameResult] = useState(null); // 'success', 'fail', null
+
+  const currentPos = path[path.length - 1];
+  const isAtExit = currentPos === 'e1' || currentPos === 'e2';
+
+  const playSound = useCallback((type) => {
+    if (!soundEnabled) return;
+    try {
+      const AudioContext = window.AudioContext || window.webkitAudioContext;
+      if (!AudioContext) return;
+      const ctx = new AudioContext();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+
+      if (type === 'move') {
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(400, ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(500, ctx.currentTime + 0.1);
+        gain.gain.setValueAtTime(0.1, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.1);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.1);
+      } else if (type === 'back') {
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(300, ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(200, ctx.currentTime + 0.1);
+        gain.gain.setValueAtTime(0.1, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.1);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.1);
+      } else if (type === 'win') {
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(400, ctx.currentTime);
+        osc.frequency.setValueAtTime(600, ctx.currentTime + 0.2);
+        osc.frequency.setValueAtTime(800, ctx.currentTime + 0.4);
+        gain.gain.setValueAtTime(0.2, ctx.currentTime);
+        gain.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.8);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.8);
+      } else if (type === 'fail') {
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(200, ctx.currentTime);
+        osc.frequency.linearRampToValueAtTime(100, ctx.currentTime + 0.5);
+        gain.gain.setValueAtTime(0.2, ctx.currentTime);
+        gain.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.5);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.5);
+      }
+    } catch (e) {
+      console.log("Audio skipped");
+    }
+  }, [soundEnabled]);
+
+  const showToastMsg = (msg) => {
+    setToast(msg);
+    setTimeout(() => setToast(null), 3000);
+  };
+
+  const handleNodeClick = (nodeId) => {
+    if (gameResult === 'success') return;
+    setGameResult(null); // 点击后重置状态
+
+    // 1. 如果点击的是已经走过的节点，执行“后退/撤销”逻辑
+    const pathIndex = path.indexOf(nodeId);
+    if (pathIndex !== -1) {
+      setPath(path.slice(0, pathIndex + 1));
+      playSound('back');
+      return;
+    }
+
+    // 2. 检查是否与当前节点相邻
+    const isAdjacent = edges.some(e => 
+      (e[0] === currentPos && e[1] === nodeId) || 
+      (e[1] === currentPos && e[0] === nodeId)
+    );
+
+    if (isAdjacent) {
+      setPath([...path, nodeId]);
+      playSound('move');
+    } else {
+      showToastMsg("⚠️ 只能沿着灰色的线，走到相邻的字哦！");
+    }
+  };
+
+  const handleSubmit = () => {
+    // 提取走过的汉字拼成字符串 (排除起点和终点)
+    const walkedChars = path
+      .filter(id => id !== 's' && id !== 'e1' && id !== 'e2')
+      .map(id => nodes.find(n => n.id === id).char)
+      .join('');
+
+    if (walkedChars === TARGET_STRING) {
+      setGameResult('success');
+      playSound('win');
+    } else {
+      setGameResult('fail');
+      playSound('fail');
+      showToastMsg("❌ 路线中有不连贯的词语，或者走错了方向，请点击路径后退修改！");
+    }
+  };
+
+  const handleRestart = () => {
+    setPath(['s']);
+    setGameResult(null);
+    setToast(null);
+  };
+
+  // 生成当前走过的汉字路径用于展示
+  const currentPathString = path
+    .filter(id => id !== 's' && id !== 'e1' && id !== 'e2')
+    .map(id => nodes.find(n => n.id === id).char)
+    .join(' -> ');
+
+  return (
+    <div className="min-h-screen bg-slate-100 p-4 md:p-8 font-sans flex flex-col items-center selection:bg-teal-200">
+      
+      {/* 顶部控制栏 */}
+      <div className="w-full max-w-5xl bg-white rounded-2xl shadow-sm p-4 mb-4 flex flex-col md:flex-row justify-between items-center gap-4">
+        <div>
+          <h1 className="text-2xl md:text-3xl font-black text-teal-800 flex items-center gap-2">
+            <Camera className="w-8 h-8 text-teal-500" /> 词语照相机 · 考试模式
+          </h1>
+          <p className="text-slate-500 text-sm mt-1 flex items-center gap-1 font-bold">
+            <Info className="w-4 h-4 text-teal-500"/> 提示：没有任何中途加分！走到出口后点击【交卷检查】。点绿色的字可以后退。
+          </p>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <button 
+            onClick={() => setShowPinyin(!showPinyin)} 
+            className={`px-4 py-2 rounded-xl font-bold transition ${showPinyin ? 'bg-teal-500 text-white shadow-md' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+          >
+            {showPinyin ? '拼音: 开' : '拼音: 关'}
+          </button>
+          <button 
+            onClick={() => setSoundEnabled(!soundEnabled)} 
+            className="p-2 bg-slate-100 text-slate-600 hover:bg-slate-200 rounded-xl transition"
+          >
+            {soundEnabled ? <Volume2 className="w-6 h-6" /> : <VolumeX className="w-6 h-6" />}
+          </button>
+          <button 
+            onClick={handleRestart} 
+            className="p-2 bg-slate-100 text-slate-600 hover:bg-slate-200 rounded-xl transition"
+            title="重新开始"
+          >
+            <RefreshCw className="w-6 h-6" />
+          </button>
+        </div>
+      </div>
+
+      {/* 游戏主体区域 */}
+      <div className={`relative w-full max-w-5xl h-[500px] md:h-[650px] bg-slate-50 rounded-[2rem] border-[8px] shadow-xl overflow-hidden transition-colors duration-500 ${gameResult === 'success' ? 'border-green-400 bg-green-50' : gameResult === 'fail' ? 'border-red-400 bg-red-50' : 'border-slate-300'}`}>
+        
+        {/* 浮动提示框 */}
+        {toast && (
+          <div className="absolute top-[10%] left-1/2 -translate-x-1/2 bg-slate-800 text-white px-6 py-3 rounded-full shadow-2xl font-bold text-sm md:text-base z-50 animate-bounce whitespace-nowrap">
+            {toast}
+          </div>
+        )}
+
+        {/* 游戏结束成功遮罩 */}
+        {gameResult === 'success' && (
+          <div className="absolute inset-0 z-40 bg-green-900/20 backdrop-blur-sm flex flex-col items-center justify-center animate-in fade-in duration-500">
+            <div className="bg-white p-8 rounded-3xl shadow-2xl text-center transform scale-110">
+              <h2 className="text-4xl font-black text-green-500 mb-2">🎉 100分！完全正确！</h2>
+              <p className="text-slate-600 font-bold mb-6">你成功找出了所有的词语连线！</p>
+              <button onClick={handleRestart} className="bg-green-500 text-white px-8 py-3 rounded-xl font-bold text-lg hover:bg-green-600 transition shadow-lg">
+                再玩一次
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* SVG 连线层 */}
+        <svg className="absolute inset-0 w-full h-full z-0 pointer-events-none">
+          {edges.map((edge, idx) => {
+            const n1 = nodes.find(n => n.id === edge[0]);
+            const n2 = nodes.find(n => n.id === edge[1]);
+            
+            // 检查这条边是否被走过
+            const p1Idx = path.indexOf(edge[0]);
+            const p2Idx = path.indexOf(edge[1]);
+            const isWalked = p1Idx !== -1 && p2Idx !== -1 && Math.abs(p1Idx - p2Idx) === 1;
+
+            return (
+              <line
+                key={idx}
+                x1={`${(n1.c + 0.5) * 10}%`}
+                y1={`${(n1.r + 0.5) * (100 / 7)}%`}
+                x2={`${(n2.c + 0.5) * 10}%`}
+                y2={`${(n2.r + 0.5) * (100 / 7)}%`}
+                stroke={isWalked ? '#14b8a6' : '#cbd5e1'}
+                strokeWidth={isWalked ? '10' : '3'}
+                strokeLinecap="round"
+                className="transition-all duration-300"
+              />
+            );
+          })}
+        </svg>
+
+        {/* 节点渲染层 */}
+        {nodes.map(node => {
+          const isSpecial = node.id === 's' || node.id === 'e1' || node.id === 'e2';
+          const isCurrent = currentPos === node.id;
+          const isVisited = path.includes(node.id);
+
+          let btnClass = "absolute flex flex-col items-center justify-center font-bold transition-all duration-200 z-10 shadow-sm whitespace-nowrap ";
+
+          if (isSpecial) {
+            btnClass += " px-3 py-1.5 md:px-4 md:py-2 rounded-xl text-xs md:text-sm ";
+            if (node.id === 's') btnClass += " bg-blue-100 text-blue-800 border-2 border-blue-400 ";
+            else btnClass += " bg-red-100 text-red-800 border-2 border-red-400 ";
+          } else {
+            btnClass += " w-10 h-10 md:w-14 md:h-14 rounded-full text-base md:text-lg ";
+            if (isCurrent) {
+              // 当前位置
+              btnClass += " bg-yellow-400 text-yellow-900 scale-125 shadow-lg ring-4 ring-yellow-200 z-30 ";
+            } else if (isVisited) {
+              // 已走过的路径 (可以点击后退)
+              btnClass += " bg-teal-500 text-white shadow-md hover:bg-teal-400 hover:scale-110 cursor-pointer z-20 ";
+            } else {
+              // 未走过的节点 (统一白色，没有任何颜色暗示)
+              btnClass += " bg-white text-slate-700 border-2 border-slate-200 hover:bg-slate-50 hover:border-slate-400 hover:scale-110 cursor-pointer ";
+            }
+          }
+
+          if (isCurrent && isSpecial) {
+             btnClass += " ring-4 ring-yellow-400 scale-110 z-30 ";
+          }
+
+          return (
+            <button
+              key={node.id}
+              style={{
+                left: `${(node.c + 0.5) * 10}%`,
+                top: `${(node.r + 0.5) * (100 / 7)}%`,
+                transform: 'translate(-50%, -50%)'
+              }}
+              className={btnClass}
+              onClick={() => handleNodeClick(node.id)}
+            >
+              {isSpecial && <MapPin className={`w-3 h-3 md:w-4 md:h-4 absolute -top-3 md:-top-5 ${node.id === 's' ? 'text-blue-500' : 'text-red-500'}`} />}
+              <span>{node.char}</span>
+              {showPinyin && (
+                <span className="text-[10px] md:text-[12px] font-black text-black leading-none mt-0.5 md:mt-1 drop-shadow-md">
+                  {node.pinyin}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* 底部答题卡面板 */}
+      <div className="w-full max-w-5xl mt-4 bg-white rounded-2xl p-5 shadow-sm border border-slate-200 flex flex-col md:flex-row justify-between items-center gap-4">
+        <div className="flex-1 w-full">
+          <h3 className="text-sm font-bold text-slate-400 mb-1">📝 我的答卷 (实时路线记录)：</h3>
+          <div className="min-h-[3rem] bg-slate-50 rounded-xl border border-slate-200 p-3 flex flex-wrap gap-x-2 gap-y-1 items-center font-bold text-slate-700 text-sm md:text-base">
+            <span className="text-blue-500">起点</span>
+            {currentPathString ? (
+              <>
+                <span className="text-slate-400">➔</span>
+                <span>{currentPathString}</span>
+              </>
+            ) : null}
+            {isAtExit && <><span className="text-slate-400">➔</span><span className="text-red-500">终点</span></>}
+          </div>
+        </div>
+
+        {/* 仅在到达出口时显示交卷按钮 */}
+        {isAtExit && gameResult !== 'success' && (
+          <button 
+            onClick={handleSubmit}
+            className="w-full md:w-auto flex items-center justify-center gap-2 bg-teal-500 hover:bg-teal-600 text-white px-8 py-4 rounded-xl font-black text-lg transition-transform hover:scale-105 shadow-lg animate-pulse"
+          >
+            <Send className="w-6 h-6" /> 交卷检查
+          </button>
+        )}
+      </div>
+
+    </div>
+  );
+}
